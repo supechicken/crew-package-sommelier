@@ -3,6 +3,7 @@
 require 'json'
 require_relative 'http_server'
 
+# expected location of this script: #{CREW_PREFIX}/lib/sommelier/
 CREW_PREFIX = File.expand_path('../..', __dir__)
 
 # start an HTTP server, wait for detect_dpi.js to upload screen DPI

@@ -2,7 +2,10 @@
 require 'fileutils'
 require 'securerandom'
 
+# expected location of this script: #{CREW_PREFIX}/bin/
 CREW_PREFIX = File.expand_path('..', __dir__)
+# export CREW_PREFIX to sommelierrc
+ENV['CREW_PREFIX'] = CREW_PREFIX
 
 $LOGFILE = (ENV['SOMMELIER_LOG'].to_s.empty?) ? '/tmp/sommelier.log' : ENV['SOMMELIER_LOG']
 
