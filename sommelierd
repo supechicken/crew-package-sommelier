@@ -2,6 +2,8 @@
 require 'fileutils'
 require 'securerandom'
 
+CREW_PREFIX = File.expand_path('..', __dir__)
+
 $LOGFILE = (ENV['SOMMELIER_LOG'].to_s.empty?) ? '/tmp/sommelier.log' : ENV['SOMMELIER_LOG']
 
 # set XDG_RUNTIME_DIR if not set
@@ -41,8 +43,11 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
 
     begin
       socket_file = "/tmp/.X11-unix/X#{display.tr(':', '')}"
+      dpi = File.read("#{CREW_PREFIX}/etc/sommelier.dpi")
+
       IO.popen([ 'sommelier', '-X', '--glamor',
         "--x-display=#{display}",
+        "--dpi=#{dpi}",
         "--x-auth=/home/chronos/.Xauthority",
         '--no-exit-with-child',
         'bash', '-c', <<~CMD
@@ -53,7 +58,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
           echo -n >> /home/chronos/.Xauthority
 
           xauth -f /home/chronos/.Xauthority add ${DISPLAY} . "#{SecureRandom.hex(16)}"
-          source #{__dir__}/../etc/sommelierrc
+          source #{CREW_PREFIX}/etc/sommelierrc
         CMD
       ], err: [:child, :out]) do |io|
         puts "[somm_x11]: process running with PID #{io.pid}"
