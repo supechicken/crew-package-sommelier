@@ -13,7 +13,7 @@ Patches and scripts for running sommelier on Chrome OS developer mode shell
 #### `patches/`
 - `data_driver.patch`: Re-add deleted `noop` data driver
 - `shm_driver.patch`: Re-add deleted `noop` shm driver
-- `virtwl_device.patch`: Set `virtwl` device to `/dev/null` (this device is not required when running natively)
+- `virtwl_device.patch`: Set `virtwl` device to `/dev/null` (the `virtwl` device only exists on Crostini VMs)
 - `drm_device.patch`: Re-add `--drm-device` command line parameter support, required by enabling hardware acceleration on X/Wayland
 
 #### `detect_dpi/`
