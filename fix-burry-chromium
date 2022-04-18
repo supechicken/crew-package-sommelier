@@ -4,7 +4,7 @@ set -eu
 : "${CREW_PREFIX:=/usr/local}"
 
 if [ -f "${CREW_PREFIX}/etc/sommelier.dpi" ]; then
-  SOMMELIER_DPI="$(< ${CREW_PREFIX:=/usr/local}/etc/sommelier.dpi)"
+  SOMMELIER_DPI="$(< ${CREW_PREFIX}/etc/sommelier.dpi)"
 else
   SOMMELIER_DPI=96
 fi
