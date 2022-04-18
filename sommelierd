@@ -49,17 +49,19 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
       dpi_file = "#{CREW_PREFIX}/etc/sommelier.dpi"
 
       if File.exist?(dpi_file)
-        ENV['SOMMELIER_DPI'] = File.read(dpi_file)
+        dpi = File.read(dpi_file).to_i
       else
         STDERR.puts "\e[1;36m", <<~EOT, "\e[0m"
           It is recommended to configure a correct DPI value manually for sommelier
 
           See https://github.com/chromebrew/crew-package-sommelier/wiki/Configure-DPI-for-Sommelier-(X11) for tutorial
         EOT
+        dpi = 96
       end
 
       IO.popen([ 'sommelier', '-X', '--glamor',
         "--scale=#{SOMMELIER_SCALE}",
+        "--dpi=#{dpi}",
         "--x-display=#{display}",
         "--x-auth=/home/chronos/.Xauthority",
         '--no-exit-with-child',
@@ -107,7 +109,7 @@ def start_somm_wl_daemon (display = SOMMELIER_WL_DISPLAY)
 
     begin
       socket_file = "#{ENV['XDG_RUNTIME_DIR']}/#{display}"
-      IO.popen([ 'sommelier', '--parent', "--scale=#{SOMMELIER_SCALE}", "--socket=#{display}" ], err: [:child, :out]) do |io|
+      IO.popen([ 'sommelier', '--parent', "--socket=#{display}" ], err: [:child, :out]) do |io|
         puts "[somm_wl]: process running with PID #{io.pid}"
         File.write('/tmp/sommelier-wl.pid', io.pid) # write pid to /tmp/sommelier-wl.pid
 
