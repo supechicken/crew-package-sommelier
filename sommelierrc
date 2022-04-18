@@ -11,10 +11,8 @@ set -eu
 set -o pipefail
 
 # Set Xft.dpi. Some applications (e.g. Chrome) use this to detect HiDPI.
-if { command -v xdpyinfo && command -v xrdb; } > /dev/null; then
-  DPI="$(xdpyinfo | sed -n -E "/dots per inch/{s|^.* ([0-9]+)x.*$|\\1|g; p}")"
-
-  xrdb -merge <<< "Xft.dpi: ${DPI}"
+if command -v xrdb > /dev/null; then
+  xrdb -merge <<< "Xft.dpi: ${SOMMELIER_DPI:-96}"
 
   # Set cursor theme
   if [[ ! "$(xrdb -get Xcursor.theme)" ]]; then

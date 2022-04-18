@@ -14,6 +14,7 @@ SOMMELIER_X_DISPLAY = (ENV['SOMMELIER_X_DISPLAY'].to_s.empty?) ? ':0' : ENV['SOM
 SOMMELIER_WL_DISPLAY = (ENV['SOMMELIER_WL_DISPLAY'].to_s.empty?) ? 'wayland-1' : ENV['SOMMELIER_WL_DISPLAY']
 
 SOMMELIER_SCALE = (ENV['SOMMELIER_SCALE'].to_s.empty?) ? '1' : ENV['SOMMELIER_SCALE']
+SOMMELIER_DPI = (ENV['SOMMELIER_DPI'].to_s.empty?) ? '96' : ENV['SOMMELIER_DPI']
 
 HELP = <<EOT
 sommelierd: Sommelier daemon manager
@@ -46,22 +47,10 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
 
     begin
       socket_file = "/tmp/.X11-unix/X#{display.tr(':', '')}"
-      dpi_file = "#{CREW_PREFIX}/etc/sommelier.dpi"
-
-      if File.exist?(dpi_file)
-        dpi = File.read(dpi_file).to_i
-      else
-        STDERR.puts "\e[1;36m", <<~EOT, "\e[0m"
-          It is recommended to configure a correct DPI value manually for sommelier
-
-          See https://github.com/chromebrew/crew-package-sommelier/wiki/Configure-DPI-for-Sommelier-(X11) for tutorial
-        EOT
-        dpi = 96
-      end
 
       IO.popen([ 'sommelier', '-X', '--glamor',
         "--scale=#{SOMMELIER_SCALE}",
-        "--dpi=#{dpi}",
+        "--dpi=#{SOMMELIER_DPI}",
         "--x-display=#{display}",
         "--x-auth=/home/chronos/.Xauthority",
         '--no-exit-with-child',
@@ -73,7 +62,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
           echo -n >> /home/chronos/.Xauthority
 
           xauth -f /home/chronos/.Xauthority add ${DISPLAY} . "#{SecureRandom.hex(16)}"
-          source #{__dir__}/../etc/sommelierrc
+          source #{CREW_PREFIX}/sommelierrc
         CMD
       ], err: [:child, :out]) do |io|
         puts "[somm_x11]: process running with PID #{io.pid}"
