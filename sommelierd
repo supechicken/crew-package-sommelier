@@ -13,7 +13,7 @@ ENV['XDG_RUNTIME_DIR'] = (ENV['XDG_RUNTIME_DIR'].to_s.empty?) ? '/var/run/chrome
 SOMMELIER_X_DISPLAY = (ENV['SOMMELIER_X_DISPLAY'].to_s.empty?) ? ':0' : ENV['SOMMELIER_X_DISPLAY']
 SOMMELIER_WL_DISPLAY = (ENV['SOMMELIER_WL_DISPLAY'].to_s.empty?) ? 'wayland-1' : ENV['SOMMELIER_WL_DISPLAY']
 
-SOMMELIER_SCALE = (ENV['SOMMELIER_SCALE'].to_s.empty?) ? '1' : ENV['SOMMELIER_SCALE']
+SOMMELIER_X_SCALE = (ENV['SOMMELIER_X_SCALE'].to_s.empty?) ? '2' : ENV['SOMMELIER_X_SCALE']
 SOMMELIER_DPI = (ENV['SOMMELIER_DPI'].to_s.empty?) ? '96' : ENV['SOMMELIER_DPI']
 
 HELP = <<EOT
@@ -49,7 +49,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
       socket_file = "/tmp/.X11-unix/X#{display.tr(':', '')}"
 
       IO.popen([ 'sommelier', '-X', '--glamor',
-        "--scale=#{SOMMELIER_SCALE}",
+        "--scale=#{SOMMELIER_X_SCALE}",
         "--dpi=#{SOMMELIER_DPI}",
         "--x-display=#{display}",
         "--x-auth=/home/chronos/.Xauthority",
