@@ -4,6 +4,9 @@ require 'securerandom'
 
 $LOGFILE = (ENV['SOMMELIER_LOG'].to_s.empty?) ? '/tmp/sommelier.log' : ENV['SOMMELIER_LOG']
 
+CREW_PREFIX = File.expand_path('..', __dir__)
+ENV['CREW_PREFIX'] = CREW_PREFIX # export CREW_PREFIX to sommelier
+
 # set XDG_RUNTIME_DIR if not set
 ENV['XDG_RUNTIME_DIR'] = (ENV['XDG_RUNTIME_DIR'].to_s.empty?) ? '/var/run/chrome' : ENV['XDG_RUNTIME_DIR']
 
@@ -41,6 +44,18 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
 
     begin
       socket_file = "/tmp/.X11-unix/X#{display.tr(':', '')}"
+      dpi_file = "#{CREW_PREFIX}/etc/sommelier.dpi"
+
+      if File.exist?(dpi_file)
+        ENV['SOMMELIER_DPI'] = File.read(dpi_file)
+      else
+        STDERR.puts "\e[1;36m", <<~EOT, "\e[0m"
+          It is recommended to configure DPI value manually for sommelier
+
+          See https://github.com/chromebrew/crew-package-sommelier/wiki/Configure-DPI-for-Sommelier-(X11) for tutorial
+        EOT
+      end
+
       IO.popen([ 'sommelier', '-X', '--glamor',
         "--x-display=#{display}",
         "--x-auth=/home/chronos/.Xauthority",
