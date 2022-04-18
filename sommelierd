@@ -62,7 +62,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
           echo -n >> /home/chronos/.Xauthority
 
           xauth -f /home/chronos/.Xauthority add ${DISPLAY} . "#{SecureRandom.hex(16)}"
-          source #{CREW_PREFIX}/sommelierrc
+          source #{CREW_PREFIX}/etc/sommelierrc
         CMD
       ], err: [:child, :out]) do |io|
         puts "[somm_x11]: process running with PID #{io.pid}"
