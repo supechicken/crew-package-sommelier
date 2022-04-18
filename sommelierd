@@ -4,8 +4,7 @@ require 'securerandom'
 
 $LOGFILE = (ENV['SOMMELIER_LOG'].to_s.empty?) ? '/tmp/sommelier.log' : ENV['SOMMELIER_LOG']
 
-CREW_PREFIX = File.expand_path('..', __dir__)
-ENV['CREW_PREFIX'] = CREW_PREFIX # export CREW_PREFIX to sommelier
+CREW_PREFIX = ( ENV['CREW_PREFIX'].to_s.empty? ) ? '/usr/local' : ENV['CREW_PREFIX']
 
 # set XDG_RUNTIME_DIR if not set
 ENV['XDG_RUNTIME_DIR'] = (ENV['XDG_RUNTIME_DIR'].to_s.empty?) ? '/var/run/chrome' : ENV['XDG_RUNTIME_DIR']
