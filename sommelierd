@@ -50,7 +50,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
         ENV['SOMMELIER_DPI'] = File.read(dpi_file)
       else
         STDERR.puts "\e[1;36m", <<~EOT, "\e[0m"
-          It is recommended to configure DPI value manually for sommelier
+          It is recommended to configure a correct DPI value manually for sommelier
 
           See https://github.com/chromebrew/crew-package-sommelier/wiki/Configure-DPI-for-Sommelier-(X11) for tutorial
         EOT
