@@ -13,6 +13,8 @@ ENV['XDG_RUNTIME_DIR'] = (ENV['XDG_RUNTIME_DIR'].to_s.empty?) ? '/var/run/chrome
 SOMMELIER_X_DISPLAY = (ENV['SOMMELIER_X_DISPLAY'].to_s.empty?) ? ':0' : ENV['SOMMELIER_X_DISPLAY']
 SOMMELIER_WL_DISPLAY = (ENV['SOMMELIER_WL_DISPLAY'].to_s.empty?) ? 'wayland-1' : ENV['SOMMELIER_WL_DISPLAY']
 
+SOMMELIER_SCALE = (ENV['SOMMELIER_SCALE'].to_s.empty?) ? '1' : ENV['SOMMELIER_SCALE']
+
 HELP = <<EOT
 sommelierd: Sommelier daemon manager
 
@@ -57,6 +59,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
       end
 
       IO.popen([ 'sommelier', '-X', '--glamor',
+        "--scale=#{SOMMELIER_SCALE}",
         "--x-display=#{display}",
         "--x-auth=/home/chronos/.Xauthority",
         '--no-exit-with-child',
@@ -104,7 +107,7 @@ def start_somm_wl_daemon (display = SOMMELIER_WL_DISPLAY)
 
     begin
       socket_file = "#{ENV['XDG_RUNTIME_DIR']}/#{display}"
-      IO.popen([ 'sommelier', '--parent', "--socket=#{display}" ], err: [:child, :out]) do |io|
+      IO.popen([ 'sommelier', '--parent', "--scale=#{SOMMELIER_SCALE}", "--socket=#{display}" ], err: [:child, :out]) do |io|
         puts "[somm_wl]: process running with PID #{io.pid}"
         File.write('/tmp/sommelier-wl.pid', io.pid) # write pid to /tmp/sommelier-wl.pid
 
