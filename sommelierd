@@ -13,7 +13,6 @@ ENV['XDG_RUNTIME_DIR'] = (ENV['XDG_RUNTIME_DIR'].to_s.empty?) ? '/var/run/chrome
 SOMMELIER_X_DISPLAY = (ENV['SOMMELIER_X_DISPLAY'].to_s.empty?) ? ':0' : ENV['SOMMELIER_X_DISPLAY']
 SOMMELIER_WL_DISPLAY = (ENV['SOMMELIER_WL_DISPLAY'].to_s.empty?) ? 'wayland-1' : ENV['SOMMELIER_WL_DISPLAY']
 
-SOMMELIER_X_SCALE = (ENV['SOMMELIER_X_SCALE'].to_s.empty?) ? '2' : ENV['SOMMELIER_X_SCALE']
 SOMMELIER_DPI = (ENV['SOMMELIER_DPI'].to_s.empty?) ? '96' : ENV['SOMMELIER_DPI']
 
 HELP = <<EOT
@@ -47,9 +46,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
 
     begin
       socket_file = "/tmp/.X11-unix/X#{display.tr(':', '')}"
-
       IO.popen([ 'sommelier', '-X', '--glamor',
-        "--scale=#{SOMMELIER_X_SCALE}",
         "--dpi=#{SOMMELIER_DPI}",
         "--x-display=#{display}",
         "--x-auth=/home/chronos/.Xauthority",
@@ -98,7 +95,7 @@ def start_somm_wl_daemon (display = SOMMELIER_WL_DISPLAY)
 
     begin
       socket_file = "#{ENV['XDG_RUNTIME_DIR']}/#{display}"
-      IO.popen([ 'sommelier', '--parent', "--socket=#{display}" ], err: [:child, :out]) do |io|
+      IO.popen([ 'sommelier', '--parent', "--dpi=#{SOMMELIER_DPI}", "--socket=#{display}" ], err: [:child, :out]) do |io|
         puts "[somm_wl]: process running with PID #{io.pid}"
         File.write('/tmp/sommelier-wl.pid', io.pid) # write pid to /tmp/sommelier-wl.pid
 
