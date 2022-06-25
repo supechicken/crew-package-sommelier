@@ -20,7 +20,7 @@ end
 # expected location of this script: #{CREW_PREFIX}/lib/sommelier/dpi_checker/
 CREW_PREFIX = File.expand_path('../../..', __dir__)
 
-puts "\e[1;33m" + 'Detecting system DPI now (a new tab will appear and close quickly)...' + "\e[0m"
+puts "\e[1;33m" + 'Detecting system DPI (a new tab will appear and close quickly)...' + "\e[0m"
 puts
 
 # start a web server, wait for dpi_checker.html to upload screen DPI
