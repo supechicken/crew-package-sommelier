@@ -71,15 +71,18 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
 
       if File.exist?(dpi_file)
         # read system DPI value from #{CREW_PREFIX}/etc/sommelier.dpi
-        dpi = File.read(dpi_file).to_i
+        dpi = File.read(dpi_file)
       else
-        # use default DPI value (96) if sommelier.dpi not exist
-        dpi = 96
+        # use default DPI value (96) if sommelier.dpi does not exist
+        dpi = '96'
         warn '[sommelier_x11]: ' + "\e[1;33m" + 'sommelier.dpi does not exist, scaling might be incorrect without it' + "\e[0m"
         warn '[sommelier_x11]: ' + "\e[1;33m" + "(generate it by running '#{__dir__}/dpi_checker/dpi_checker.rb')" + "\e[0m"
       end
 
       puts "[sommelier_x11]: current DPI value: #{dpi}"
+
+      ENV['SOMMELIER_DPI'] ||= dpi
+      ENV['SOMMELIER_GLAMOR'] ||= '1'
 
       IO.popen([ 'sommelier', '-X', '--glamor',
         '--direct-scale',
