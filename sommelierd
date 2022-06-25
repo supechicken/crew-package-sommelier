@@ -83,7 +83,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
 
       IO.popen([ 'sommelier', '-X', '--glamor',
         '--direct-scale',
-        "--dpi=#{}",
+        "--dpi=#{dpi}",
         "--x-display=#{display}",
         "--x-auth=/home/chronos/.Xauthority",
         '--no-exit-with-child',
