@@ -587,7 +587,6 @@ index 66ee27a..99b7841 100644
 @@ -222,6 +222,23 @@
    int device_scale_factor;
    int expecting_scale;
-   bool expecting_logical_size;
 +
 +  // The scaling factors for direct mode
 +  // virt_scale: Used to translate from physical space to virtual space
@@ -605,6 +604,5 @@ index 66ee27a..99b7841 100644
 +  double virt_scale_y;
 +  double xdg_scale_x;
 +  double xdg_scale_y;
-   int32_t logical_width;
-   int32_t logical_height;
-   int32_t logical_x;
+   struct wl_list link;
+ };
