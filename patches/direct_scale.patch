@@ -1,7 +1,7 @@
-diff --git somm1/sommelier-ctx.cc somm2/sommelier-ctx.cc
+diff --git a/sommelier-ctx.cc b/sommelier-ctx.cc
 index 86231dc..3fa528c 100644
---- somm1/sommelier-ctx.cc
-+++ somm2/sommelier-ctx.cc
+--- a/sommelier-ctx.cc
++++ b/sommelier-ctx.cc
 @@ -143,6 +143,10 @@
    ctx->needs_set_input_focus = 0;
    ctx->desired_scale = 1.0;
@@ -21,10 +21,10 @@ index 86231dc..3fa528c 100644
  
    wl_list_init(&ctx->accelerators);
    wl_list_init(&ctx->registries);
-diff --git somm1/sommelier-ctx.h somm2/sommelier-ctx.h
+diff --git a/sommelier-ctx.h b/sommelier-ctx.h
 index a4bfc69..56f0be3 100644
---- somm1/sommelier-ctx.h
-+++ somm2/sommelier-ctx.h
+--- a/sommelier-ctx.h
++++ b/sommelier-ctx.h
 @@ -123,6 +123,14 @@
    double desired_scale;
    double scale;
@@ -48,10 +48,10 @@ index a4bfc69..56f0be3 100644
    // Never freed after allocation due the fact sommelier doesn't have a
    // shutdown function yet.
    WaylandChannel* channel;
-diff --git somm1/sommelier-output.cc somm2/sommelier-output.cc
+diff --git a/sommelier-output.cc b/sommelier-output.cc
 index 166f8e3..ec7cebb 100644
---- somm1/sommelier-output.cc
-+++ somm2/sommelier-output.cc
+--- a/sommelier-output.cc
++++ b/sommelier-output.cc
 @@ -2,7 +2,8 @@
  // Use of this source code is governed by a BSD-style license that can be
  // found in the LICENSE file.
@@ -159,10 +159,10 @@ index 166f8e3..ec7cebb 100644
    // X/Y are best left at origin as managed X windows are kept centered on
    // the root window. The result is that all outputs are overlapping and
    // pointer events can always be dispatched to the visible region of the
-diff --git somm1/sommelier-transform.cc somm2/sommelier-transform.cc
+diff --git a/sommelier-transform.cc b/sommelier-transform.cc
 index 45b3526..75ec1b9 100644
---- somm1/sommelier-transform.cc
-+++ somm2/sommelier-transform.cc
+--- a/sommelier-transform.cc
++++ b/sommelier-transform.cc
 @@ -7,15 +7,97 @@
  #include "sommelier-tracing.h"    // NOLINT(build/include_directory)
  #include "sommelier-transform.h"  // NOLINT(build/include_directory)
@@ -396,10 +396,10 @@ index 45b3526..75ec1b9 100644
 +  *width = (*width) * ctx->scale;
 +  *height = (*height) * ctx->scale;
  }
-diff --git somm1/sommelier-transform.h somm2/sommelier-transform.h
+diff --git a/sommelier-transform.h b/sommelier-transform.h
 index ada52b1..85de1c6 100644
---- somm1/sommelier-transform.h
-+++ somm2/sommelier-transform.h
+--- a/sommelier-transform.h
++++ b/sommelier-transform.h
 @@ -7,6 +7,66 @@
  
  #include "sommelier-ctx.h"  // NOLINT(build/include_directory)
@@ -481,10 +481,10 @@ index ada52b1..85de1c6 100644
 +                                    int32_t* height);
 +
  #endif  // VM_TOOLS_SOMMELIER_SOMMELIER_TRANSFORM_H_
-diff --git somm1/sommelier.cc somm2/sommelier.cc
+diff --git a/sommelier.cc b/sommelier.cc
 index 387221f..1378ae1 100644
---- somm1/sommelier.cc
-+++ somm2/sommelier.cc
+--- a/sommelier.cc
++++ b/sommelier.cc
 @@ -2925,33 +2925,34 @@
  static void sl_calculate_scale_for_xwayland(struct sl_context* ctx) {
    struct sl_host_output* output;
@@ -580,10 +580,10 @@ index 387221f..1378ae1 100644
    }
  
    if (!frame_color)
-diff --git somm1/sommelier.h somm2/sommelier.h
+diff --git a/sommelier.h b/sommelier.h
 index 66ee27a..99b7841 100644
---- somm1/sommelier.h
-+++ somm2/sommelier.h
+--- a/sommelier.h
++++ b/sommelier.h
 @@ -222,6 +222,23 @@
    int device_scale_factor;
    int expecting_scale;
