@@ -1,0 +1,610 @@
+diff --git a/vm_tools/sommelier/sommelier-ctx.cc b/vm_tools/sommelier/sommelier-ctx.cc
+index 86231dc..3fa528c 100644
+--- a/vm_tools/sommelier/sommelier-ctx.cc
++++ b/vm_tools/sommelier/sommelier-ctx.cc
+@@ -143,6 +143,10 @@
+   ctx->needs_set_input_focus = 0;
+   ctx->desired_scale = 1.0;
+   ctx->scale = 1.0;
++  ctx->virt_scale_x = 1.0;
++  ctx->virt_scale_y = 1.0;
++  ctx->xdg_scale_x = 1.0;
++  ctx->xdg_scale_y = 1.0;
+   ctx->application_id = NULL;
+   ctx->application_id_property_name = NULL;
+   ctx->exit_with_child = 1;
+@@ -177,6 +181,7 @@
+   ctx->timing = NULL;
+   ctx->trace_filename = NULL;
+   ctx->trace_system = false;
++  ctx->use_direct_scale = false;
+ 
+   wl_list_init(&ctx->accelerators);
+   wl_list_init(&ctx->registries);
+diff --git a/vm_tools/sommelier/sommelier-ctx.h b/vm_tools/sommelier/sommelier-ctx.h
+index a4bfc69..56f0be3 100644
+--- a/vm_tools/sommelier/sommelier-ctx.h
++++ b/vm_tools/sommelier/sommelier-ctx.h
+@@ -123,6 +123,14 @@
+   double desired_scale;
+   double scale;
+ 
++  // These scale factors are used for the direct scaling mode.
++  // These factors are set to the values computed from the internal/default
++  // display.
++  // See sommelier-transform.h and the definition in sl_output
++  // for more details on this.
++  double virt_scale_x, virt_scale_y;
++  double xdg_scale_x, xdg_scale_y;
++
+   // If non-null, all X11 client apps will be given this application ID.
+   const char* application_id;
+ 
+@@ -172,6 +180,7 @@
+   bool trace_system;
+   bool use_explicit_fence;
+   bool use_virtgpu_channel;
++  bool use_direct_scale;
+   // Never freed after allocation due the fact sommelier doesn't have a
+   // shutdown function yet.
+   WaylandChannel* channel;
+diff --git a/vm_tools/sommelier/sommelier-output.cc b/vm_tools/sommelier/sommelier-output.cc
+index 166f8e3..ec7cebb 100644
+--- a/vm_tools/sommelier/sommelier-output.cc
++++ b/vm_tools/sommelier/sommelier-output.cc
+@@ -2,7 +2,8 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
+-#include "sommelier.h"  // NOLINT(build/include_directory)
++#include "sommelier.h"            // NOLINT(build/include_directory)
++#include "sommelier-transform.h"  // NOLINT(build/include_directory)
+ 
+ #include <assert.h>
+ #include <stdlib.h>
+@@ -130,7 +131,66 @@
+   }
+ }
+ 
+-void sl_output_send_host_output_state(struct sl_host_output* host) {
++void sl_output_init_dimensions_direct(struct sl_host_output* host,
++                                      int* out_scale,
++                                      int* out_physical_width,
++                                      int* out_physical_height,
++                                      int* out_width,
++                                      int* out_height) {
++  int32_t virtual_width = host->width;
++  int32_t virtual_height = host->height;
++
++  // This requires xdg_output_manager, it is assumed that it will be
++  // available and we will have an appropriate set of logical dimensions
++  // for this particular output.
++  assert(host->ctx->viewporter);
++  assert(host->ctx->xdg_output_manager);
++
++  // The virtual width/height is computed by this function here based
++  // on the physical width/height
++  sl_transform_output_dimensions(host->ctx, &virtual_width, &virtual_height);
++
++  host->virt_scale_x = static_cast<double>(virtual_width) / host->width;
++  host->virt_scale_y = static_cast<double>(virtual_height) / host->height;
++
++  *out_width = virtual_width;
++  *out_height = virtual_height;
++
++  // Force the scale to 1
++  //
++  // This is reported to the guest through the wl_output protocol.
++  // This value will signal by how much a compositor will upscale
++  // all buffers by (1 is no scale).
++  *out_scale = 1;
++
++  // The physical dimensions (in mm) are the same, regardless
++  // of the provided scale factor.
++  *out_physical_width = host->physical_width;
++  *out_physical_height = host->physical_height;
++
++  // We want to be able to transform from virtual to XDG logical
++  // coordinates
++  // Virt to XDG -> div
++  // XDG to Virt -> mul
++  host->xdg_scale_x = static_cast<double>(virtual_width) /
++                      static_cast<double>(host->logical_width);
++  host->xdg_scale_y = static_cast<double>(virtual_height) /
++                      static_cast<double>(host->logical_height);
++
++  if (host->internal) {
++    host->ctx->virt_scale_x = host->virt_scale_x;
++    host->ctx->virt_scale_y = host->virt_scale_y;
++    host->ctx->xdg_scale_x = host->xdg_scale_x;
++    host->ctx->xdg_scale_y = host->xdg_scale_y;
++  }
++}
++
++void sl_output_get_dimensions_original(struct sl_host_output* host,
++                                       int* out_scale,
++                                       int* out_physical_width,
++                                       int* out_physical_height,
++                                       int* out_width,
++                                       int* out_height) {
+   int scale;
+   int physical_width;
+   int physical_height;
+@@ -162,6 +222,28 @@
+     }
+   }
+ 
++  *out_scale = scale;
++  *out_physical_width = physical_width;
++  *out_physical_height = physical_height;
++  *out_width = width;
++  *out_height = height;
++}
++
++void sl_output_send_host_output_state(struct sl_host_output* host) {
++  int scale;
++  int physical_width;
++  int physical_height;
++  int width;
++  int height;
++
++  if (host->ctx->use_direct_scale) {
++    sl_output_init_dimensions_direct(host, &scale, &physical_width,
++                                     &physical_height, &width, &height);
++  } else {
++    sl_output_get_dimensions_original(host, &scale, &physical_width,
++                                      &physical_height, &width, &height);
++  }
++
+   // X/Y are best left at origin as managed X windows are kept centered on
+   // the root window. The result is that all outputs are overlapping and
+   // pointer events can always be dispatched to the visible region of the
+diff --git a/vm_tools/sommelier/sommelier-transform.cc b/vm_tools/sommelier/sommelier-transform.cc
+index 45b3526..75ec1b9 100644
+--- a/vm_tools/sommelier/sommelier-transform.cc
++++ b/vm_tools/sommelier/sommelier-transform.cc
+@@ -7,15 +7,97 @@
+ #include "sommelier-tracing.h"    // NOLINT(build/include_directory)
+ #include "sommelier-transform.h"  // NOLINT(build/include_directory)
+ 
++static double sl_transform_direct_axis_scale(struct sl_context* ctx,
++                                             uint32_t axis) {
++  return (axis == 0) ? ctx->xdg_scale_y : ctx->xdg_scale_x;
++}
++
++static void sl_transform_direct_to_host_damage(int64_t* x,
++                                               int64_t* y,
++                                               double scale_x,
++                                               double scale_y) {
++  double xwhole = trunc(static_cast<double>(*x) / scale_x);
++  double ywhole = trunc(static_cast<double>(*y) / scale_y);
++
++  *x = static_cast<int64_t>(xwhole);
++  *y = static_cast<int64_t>(ywhole);
++}
++
++static void sl_transform_direct_to_guest_fixed(struct sl_context* ctx,
++                                               wl_fixed_t* coord,
++                                               uint32_t axis) {
++  double scale = sl_transform_direct_axis_scale(ctx, axis);
++  double result = wl_fixed_to_double(*coord) * scale;
++
++  *coord = wl_fixed_from_double(result);
++}
++
++static void sl_transform_direct_to_guest_fixed(struct sl_context* ctx,
++                                               wl_fixed_t* x,
++                                               wl_fixed_t* y) {
++  double resultx = wl_fixed_to_double(*x) * ctx->xdg_scale_x;
++  double resulty = wl_fixed_to_double(*y) * ctx->xdg_scale_y;
++
++  *x = wl_fixed_from_double(resultx);
++  *y = wl_fixed_from_double(resulty);
++}
++
++static void sl_transform_direct_to_host_fixed(struct sl_context* ctx,
++                                              wl_fixed_t* coord,
++                                              uint32_t axis) {
++  double scale = sl_transform_direct_axis_scale(ctx, axis);
++  double result = wl_fixed_to_double(*coord) / scale;
++
++  *coord = wl_fixed_from_double(result);
++}
++
++static void sl_transform_direct_to_host_fixed(struct sl_context* ctx,
++                                              wl_fixed_t* x,
++                                              wl_fixed_t* y) {
++  double resultx = wl_fixed_to_double(*x) / ctx->xdg_scale_x;
++  double resulty = wl_fixed_to_double(*y) / ctx->xdg_scale_y;
++
++  *x = wl_fixed_from_double(resultx);
++  *y = wl_fixed_from_double(resulty);
++}
++
++static void sl_transform_direct_to_guest(struct sl_context* ctx,
++                                         int32_t* x,
++                                         int32_t* y) {
++  double xwhole = trunc(ctx->xdg_scale_x * static_cast<double>(*x));
++  double ywhole = trunc(ctx->xdg_scale_y * static_cast<double>(*y));
++
++  *x = static_cast<int32_t>(xwhole);
++  *y = static_cast<int32_t>(ywhole);
++}
++
++static void sl_transform_direct_to_host(struct sl_context* ctx,
++                                        int32_t* x,
++                                        int32_t* y) {
++  double xwhole = trunc(static_cast<double>(*x) / ctx->xdg_scale_x);
++  double ywhole = trunc(static_cast<double>(*y) / ctx->xdg_scale_y);
++
++  *x = static_cast<int32_t>(xwhole);
++  *y = static_cast<int32_t>(ywhole);
++}
++
+ bool sl_transform_viewport_scale(struct sl_context* ctx,
+                                  double contents_scale,
+                                  int32_t* width,
+                                  int32_t* height) {
+   double scale = ctx->scale * contents_scale;
++
++  // TODO(mrisaacb): It may be beneficial to skip the set_destination call
++  // when the virtual and logical space match.
+   bool do_viewport = true;
+ 
+-  *width = ceil(*width / scale);
+-  *height = ceil(*height / scale);
++  if (ctx->use_direct_scale) {
++    sl_transform_direct_to_host(ctx, width, height);
++  } else {
++    *width = ceil(*width / scale);
++    *height = ceil(*height / scale);
++  }
++
+   return do_viewport;
+ }
+ 
+@@ -29,68 +111,104 @@
+   double sx = scalex * ctx->scale;
+   double sy = scaley * ctx->scale;
+ 
+-  // Enclosing rect after scaling and outset by one pixel to account for
+-  // potential filtering.
+-  *x1 = MAX(MIN_SIZE, (*x1) - 1) / sx;
+-  *y1 = MAX(MIN_SIZE, (*y1) - 1) / sy;
+-  *x2 = ceil(MIN((*x2) + 1, MAX_SIZE) / sx);
+-  *y2 = ceil(MIN((*y2) + 1, MAX_SIZE) / sy);
++  if (ctx->use_direct_scale) {
++    sl_transform_direct_to_host_damage(x1, y1, sx, sy);
++    sl_transform_direct_to_host_damage(x2, y2, sx, sy);
++  } else {
++    // Enclosing rect after scaling and outset by one pixel to account for
++    // potential filtering.
++    *x1 = MAX(MIN_SIZE, (*x1) - 1) / sx;
++    *y1 = MAX(MIN_SIZE, (*y1) - 1) / sy;
++    *x2 = ceil(MIN((*x2) + 1, MAX_SIZE) / sx);
++    *y2 = ceil(MIN((*y2) + 1, MAX_SIZE) / sy);
++  }
+ }
+ 
+ void sl_transform_host_to_guest(struct sl_context* ctx,
+                                 int32_t* x,
+                                 int32_t* y) {
+-  (*x) *= ctx->scale;
+-  (*y) *= ctx->scale;
++  if (ctx->use_direct_scale) {
++    sl_transform_direct_to_guest(ctx, x, y);
++  } else {
++    (*x) *= ctx->scale;
++    (*y) *= ctx->scale;
++  }
+ }
+ 
+ void sl_transform_host_to_guest_fixed(struct sl_context* ctx,
+                                       wl_fixed_t* x,
+                                       wl_fixed_t* y) {
+-  double dx = wl_fixed_to_double(*x);
+-  double dy = wl_fixed_to_double(*y);
++  if (ctx->use_direct_scale) {
++    sl_transform_direct_to_guest_fixed(ctx, x, y);
++  } else {
++    double dx = wl_fixed_to_double(*x);
++    double dy = wl_fixed_to_double(*y);
+ 
+-  dx *= ctx->scale;
+-  dy *= ctx->scale;
++    dx *= ctx->scale;
++    dy *= ctx->scale;
+ 
+-  *x = wl_fixed_from_double(dx);
+-  *y = wl_fixed_from_double(dy);
++    *x = wl_fixed_from_double(dx);
++    *y = wl_fixed_from_double(dy);
++  }
+ }
+ 
+ void sl_transform_host_to_guest_fixed(struct sl_context* ctx,
+                                       wl_fixed_t* coord,
+                                       uint32_t axis) {
+-  double dx = wl_fixed_to_double(*coord);
++  if (ctx->use_direct_scale) {
++    sl_transform_direct_to_guest_fixed(ctx, coord, axis);
++  } else {
++    double dx = wl_fixed_to_double(*coord);
+ 
+-  dx *= ctx->scale;
+-  *coord = wl_fixed_from_double(dx);
++    dx *= ctx->scale;
++    *coord = wl_fixed_from_double(dx);
++  }
+ }
+ 
+ void sl_transform_guest_to_host(struct sl_context* ctx,
+                                 int32_t* x,
+                                 int32_t* y) {
+-  (*x) /= ctx->scale;
+-  (*y) /= ctx->scale;
++  if (ctx->use_direct_scale) {
++    sl_transform_direct_to_host(ctx, x, y);
++  } else {
++    (*x) /= ctx->scale;
++    (*y) /= ctx->scale;
++  }
+ }
+ 
+ void sl_transform_guest_to_host_fixed(struct sl_context* ctx,
+                                       wl_fixed_t* x,
+                                       wl_fixed_t* y) {
+-  double dx = wl_fixed_to_double(*x);
+-  double dy = wl_fixed_to_double(*y);
++  if (ctx->use_direct_scale) {
++    sl_transform_direct_to_host_fixed(ctx, x, y);
++  } else {
++    double dx = wl_fixed_to_double(*x);
++    double dy = wl_fixed_to_double(*y);
+ 
+-  dx /= ctx->scale;
+-  dy /= ctx->scale;
++    dx /= ctx->scale;
++    dy /= ctx->scale;
+ 
+-  *x = wl_fixed_from_double(dx);
+-  *y = wl_fixed_from_double(dy);
++    *x = wl_fixed_from_double(dx);
++    *y = wl_fixed_from_double(dy);
++  }
+ }
+ 
+ void sl_transform_guest_to_host_fixed(struct sl_context* ctx,
+                                       wl_fixed_t* coord,
+                                       uint32_t axis) {
+-  double dx = wl_fixed_to_double(*coord);
++  if (ctx->use_direct_scale) {
++    sl_transform_direct_to_host_fixed(ctx, coord, axis);
++  } else {
++    double dx = wl_fixed_to_double(*coord);
+ 
+-  dx /= ctx->scale;
+-  *coord = wl_fixed_from_double(dx);
++    dx /= ctx->scale;
++    *coord = wl_fixed_from_double(dx);
++  }
++}
++
++void sl_transform_output_dimensions(struct sl_context* ctx,
++                                    int32_t* width,
++                                    int32_t* height) {
++  *width = (*width) * ctx->scale;
++  *height = (*height) * ctx->scale;
+ }
+diff --git a/vm_tools/sommelier/sommelier-transform.h b/vm_tools/sommelier/sommelier-transform.h
+index ada52b1..85de1c6 100644
+--- a/vm_tools/sommelier/sommelier-transform.h
++++ b/vm_tools/sommelier/sommelier-transform.h
+@@ -7,6 +7,66 @@
+ 
+ #include "sommelier-ctx.h"  // NOLINT(build/include_directory)
+ 
++// Direct Scaling Mode Explained:
++//
++// It will be helpful to define the 3 coordinate spaces that we need to
++// manage:
++//
++// 1. Physical Coordinate Space: This refers to the actual physical dimensions
++//    of the devices display. Typical sizes would be 3840x2160, 1920x1080, etc.
++//
++// 2. Virtual Coordinate Space: This refers to the coordinate space that is
++//    formed by multiplying the scale factor with the physical dimensions.
++//    (Example: scale = 1.0, physical = 3840x2160, virtual = 3840x2160)
++//    (Example: scale = 0.5, physical = 3840x2160, virtual = 1920x1080)
++//    The scale factor will come from the "--scale" command line parameter or
++//    from the associated environment variable.
++//
++// 3. Host Logical Space: The dimensions of this space are defined
++//    entirely by the host. The exact dimensions are retrieved through
++//    the xdg_output interface. It is assumed that there is a direct, linear
++//    relationship between the logical space and the physical space on the
++//    host. As an example:
++//     a) A 1600x900 logical space
++//     b) A 3840x2160 physical space
++//
++//     If we place a 1600x900 dimensioned object at the origin of the logical
++//     space, it should appear as a 3840x2160 object within the physical space
++//     (also at the origin).
++//
++// The product of the desired scale factor and the physical dimensions may
++// result in non-integer values. In these cases, the result
++// is rounded down towards zero (truncate). This slight modification
++// will require recomputation of the scale factors to maintain consistency
++// between the two coordinate spaces. For this reason, the (single) scale
++// factor provided as input from the user is used to generate the virtual
++// coordinates. Then once those have been computed (and rounded), the scale
++// factors for each axis will then be recalculated using the virtual and
++// logical dimensions. Each axis is given its own scale factor because
++// it is possible for only one axis to require rounding.
++//
++// The logical coordinates come to us from the host. This is the
++// coordinate space that the host is operating in. This can change
++// based on the users scale settings.
++//
++// The physical coordinate space is no longer necessary once the virtual
++// coordinate space has been formed, so no scaling factors are needed to
++// convert to that space.
++//
++// Xwayland operates within the virtual coordinate space and the
++// host is operating within its logical space. Sommelier only needs to
++// facilitate translations between these two coordinate spaces.
++//
++// The virtual to logical scale factors are derived from the ratios between
++// the virtual coordinate spaces dimensions and the logical coordinate spaces
++// dimensions.
++//
++// In this mode, a buffer that is full screen sized within Xwayland (virtual)
++// will also be full screen sized in the logical coordinate space. The same
++// pattern holds with a quarter resolution sized image. With a scale factor
++// of 1.0, it is expected that there will be no scaling done to present the
++// image onto the screen.
++
+ // Coordinate transform functions
+ //
+ // In general, the transformation functions fall under one of these
+@@ -75,4 +135,13 @@
+                                       wl_fixed_t* coord,
+                                       uint32_t axis);
+ 
++// This function performs the physical to virtual transformation
++// based on the scale factor provided by the command line/env.
++// This function is called in response to the physical dimensions being sent
++// by the host. The virtual dimensions are calculated by this function and
++// then relayed to the guest.
++void sl_transform_output_dimensions(struct sl_context* ctx,
++                                    int32_t* width,
++                                    int32_t* height);
++
+ #endif  // VM_TOOLS_SOMMELIER_SOMMELIER_TRANSFORM_H_
+diff --git a/vm_tools/sommelier/sommelier.cc b/vm_tools/sommelier/sommelier.cc
+index 387221f..1378ae1 100644
+--- a/vm_tools/sommelier/sommelier.cc
++++ b/vm_tools/sommelier/sommelier.cc
+@@ -2925,33 +2925,34 @@
+ static void sl_calculate_scale_for_xwayland(struct sl_context* ctx) {
+   struct sl_host_output* output;
+   double default_scale_factor = 1.0;
+-  double scale;
++  double scale = ctx->desired_scale;
+ 
+-  // Find internal output and determine preferred scale factor.
+-  wl_list_for_each(output, &ctx->host_outputs, link) {
+-    if (output->internal) {
+-      double preferred_scale =
+-          sl_output_aura_scale_factor_to_double(output->preferred_scale);
++  if (!ctx->use_direct_scale) {
++    // Find internal output and determine preferred scale factor.
++    wl_list_for_each(output, &ctx->host_outputs, link) {
++      if (output->internal) {
++        double preferred_scale =
++            sl_output_aura_scale_factor_to_double(output->preferred_scale);
+ 
+-      if (ctx->aura_shell) {
+-        double device_scale_factor =
+-            sl_output_aura_scale_factor_to_double(output->device_scale_factor);
++        if (ctx->aura_shell) {
++          double device_scale_factor = sl_output_aura_scale_factor_to_double(
++              output->device_scale_factor);
+ 
+-        default_scale_factor = device_scale_factor * preferred_scale;
++          default_scale_factor = device_scale_factor * preferred_scale;
++        }
++        break;
+       }
+-      break;
+     }
++    // We use the default scale factor multiplied by desired scale set by the
++    // user. This gives us HiDPI support by default but the user can still
++    // adjust it if higher or lower density is preferred.
++    scale = ctx->desired_scale * default_scale_factor;
++
++    // Round to integer scale if wp_viewporter interface is not present.
++    if (!ctx->viewporter)
++      scale = round(scale);
+   }
+ 
+-  // We use the default scale factor multipled by desired scale set by the
+-  // user. This gives us HiDPI support by default but the user can still
+-  // adjust it if higher or lower density is preferred.
+-  scale = ctx->desired_scale * default_scale_factor;
+-
+-  // Round to integer scale if wp_viewporter interface is not present.
+-  if (!ctx->viewporter)
+-    scale = round(scale);
+-
+   // Clamp and set scale.
+   ctx->scale = MIN(MAX_SCALE, MAX(MIN_SCALE, scale));
+ 
+@@ -3102,6 +3103,7 @@
+       "  --drm-device=DEVICE\t\tDRM device to use\n"
+       "  --glamor\t\t\tUse glamor to accelerate X11 clients\n"
+       "  --timing-filename=PATH\tPath to timing output log\n"
++      "  --direct-scale\tEnable direct scaling mode"
+ #ifdef PERFETTO_TRACING
+       "  --trace-filename=PATH\t\tPath to Perfetto trace filename\n"
+       "  --trace-system\t\tPerfetto trace to system daemon\n"
+@@ -3184,6 +3186,8 @@
+       xwayland_cmd_prefix = sl_arg_value(arg);
+     } else if (strstr(arg, "--client-fd") == arg) {
+       client_fd = atoi(sl_arg_value(arg));
++    } else if (strstr(arg, "--direct-scale") == arg) {
++      ctx.use_direct_scale = true;
+     } else if (strstr(arg, "--scale") == arg) {
+       scale = sl_arg_value(arg);
+     } else if (strstr(arg, "--dpi") == arg) {
+@@ -3384,6 +3388,7 @@
+           char* arg = argv[j];
+           if (strstr(arg, "--display") == arg ||
+               strstr(arg, "--scale") == arg ||
++              strstr(arg, "--direct-scale") == arg ||
+               strstr(arg, "--accelerators") == arg ||
+               strstr(arg, "--drm-device") == arg ||
+               strstr(arg, "--support-damage-buffer") == arg) {
+@@ -3421,7 +3426,13 @@
+   if (scale) {
+     ctx.desired_scale = atof(scale);
+     // Round to integer scale until we detect wp_viewporter support.
+-    ctx.scale = MIN(MAX_SCALE, MAX(MIN_SCALE, round(ctx.desired_scale)));
++    // In direct scale mode, take the scale value as is.
++
++    if (ctx.use_direct_scale) {
++      ctx.scale = ctx.desired_scale;
++    } else {
++      ctx.scale = MIN(MAX_SCALE, MAX(MIN_SCALE, round(ctx.desired_scale)));
++    }
+   }
+ 
+   if (!frame_color)
+diff --git a/vm_tools/sommelier/sommelier.h b/vm_tools/sommelier/sommelier.h
+index 66ee27a..99b7841 100644
+--- a/vm_tools/sommelier/sommelier.h
++++ b/vm_tools/sommelier/sommelier.h
+@@ -222,6 +222,23 @@
+   int device_scale_factor;
+   int expecting_scale;
+   bool expecting_logical_size;
++
++  // The scaling factors for direct mode
++  // virt_scale: Used to translate from physical space to virtual space
++  // xdg_scale: Used to translate from virtual space to logical space
++  //
++  // The logical space is defined by the host. It will be retrieved through
++  // the xdg_output_manager interface.
++  //
++  // All spaces, and by consequence all scale factors, will be unique to each
++  // particular output.
++  //
++  // For more details, see sommelier-transform.h
++
++  double virt_scale_x;
++  double virt_scale_y;
++  double xdg_scale_x;
++  double xdg_scale_y;
+   int32_t logical_width;
+   int32_t logical_height;
+   int32_t logical_x;
