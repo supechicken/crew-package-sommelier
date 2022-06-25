@@ -11,6 +11,8 @@ ENV['XDG_RUNTIME_DIR'] = (ENV.fetch('XDG_RUNTIME_DIR', '').empty?) ? '/var/run/c
 SOMMELIER_X_DISPLAY = (ENV.fetch('SOMMELIER_X_DISPLAY', '').empty?) ? ':0' : ENV['SOMMELIER_X_DISPLAY']
 SOMMELIER_WL_DISPLAY = (ENV.fetch('SOMMELIER_WL_DISPLAY', '').empty?) ? 'wayland-1' : ENV['SOMMELIER_WL_DISPLAY']
 
+# expected location of this script: #{CREW_PREFIX}/bin
+CREW_PREFIX = File.expand_path('..', __dir__)
 PROG = File.basename($0)
 
 trap('INT') { abort 'Interrupted' }
@@ -67,7 +69,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
 
     begin
       socket_file = "/tmp/.X11-unix/X#{display.tr(':', '')}"
-      dpi_file = "#{__dir__}/../etc/sommelier.dpi"
+      dpi_file = "#{CREW_PREFIX}/etc/sommelier.dpi"
 
       if ! ENV.fetch('SOMMELIER_DPI', '').empty?
         # set Xft.dpi to SOMMELIER_DPI if set
@@ -79,7 +81,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
         # use default DPI value (96) if sommelier.dpi does not exist
         dpi = '96'
         warn '[sommelier_x11]: ' + "\e[1;33m" + 'sommelier.dpi does not exist, scaling might be incorrect without it' + "\e[0m"
-        warn '[sommelier_x11]: ' + "\e[1;33m" + "(generate it by running '#{__dir__}/dpi_checker/dpi_checker.rb')" + "\e[0m"
+        warn '[sommelier_x11]: ' + "\e[1;33m" + "(generate it by running '#{CREW_PREFIX}/lib/sommelier/dpi_checker/dpi_checker.rb')" + "\e[0m"
       end
 
       puts "[sommelier_x11]: current DPI value: #{dpi}"
@@ -101,7 +103,7 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
           echo -n >> /home/chronos/.Xauthority
 
           xauth -f /home/chronos/.Xauthority add ${DISPLAY} . "#{SecureRandom.hex(16)}"
-          source #{__dir__}/../etc/sommelierrc
+          source #{CREW_PREFIX}/etc/sommelierrc
         CMD
       ], err: [:child, :out]) do |io|
         puts "[sommelier_x11]: process running with process ID #{io.pid}"
@@ -167,7 +169,7 @@ def stop_somm
     end
   end
 
-  sleep 0.5 # ensure the daemon processes have been killed
+  sleep 1 # ensure the daemon processes have been killed
   puts "sommelier stopped"
 end
 
