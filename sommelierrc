@@ -14,17 +14,15 @@ set -o pipefail
 
 # Set Xft.dpi. Some applications (e.g. Chrome) use this to detect HiDPI.
 if command -v xrdb > /dev/null; then
-  if [[ -z "${SOMMELIER_DPI:-}" ]]; then
-    if [ -f "${CREW_PREFIX}"/etc/sommelier.dpi ]; then
-      # set Xft.dpi with the value in sommelier.dpi if SOMMELIER_DPI not set
-      DPI="$(< "${CREW_PREFIX}"/etc/sommelier.dpi)"
-    else
-      # set Xft.dpi to 96 if sommelier.dpi does not exist
-      DPI=96
-    fi
-  else
-    # set Xft.dpi to SOMMELIER_DPI
+  if [[ -n "${SOMMELIER_DPI:-}" ]]; then
+    # set Xft.dpi to SOMMELIER_DPI if set
     DPI="${SOMMELIER_DPI}"
+  elif [ -f "${CREW_PREFIX}"/etc/sommelier.dpi ]; then
+    # set Xft.dpi with the value in sommelier.dpi if SOMMELIER_DPI not set
+    DPI="$(< "${CREW_PREFIX}"/etc/sommelier.dpi)"
+  else
+    # set Xft.dpi to 96 if sommelier.dpi does not exist
+    DPI=96
   fi
 
   xrdb -merge <<< "Xft.dpi: ${DPI}"

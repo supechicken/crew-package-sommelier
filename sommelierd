@@ -69,7 +69,10 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
       socket_file = "/tmp/.X11-unix/X#{display.tr(':', '')}"
       dpi_file = "#{__dir__}/../etc/sommelier.dpi"
 
-      if File.exist?(dpi_file)
+      if ! ENV.fetch('SOMMELIER_DPI', '').empty?
+        # set Xft.dpi to SOMMELIER_DPI if set
+        dpi = ENV['SOMMELIER_DPI']
+      elsif File.exist?(dpi_file)
         # read system DPI value from #{CREW_PREFIX}/etc/sommelier.dpi
         dpi = File.read(dpi_file)
       else
@@ -81,8 +84,8 @@ def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
 
       puts "[sommelier_x11]: current DPI value: #{dpi}"
 
-      ENV['SOMMELIER_DPI'] ||= dpi
-      ENV['SOMMELIER_GLAMOR'] ||= '1'
+      ENV['SOMMELIER_DPI'] = dpi
+      ENV['SOMMELIER_GLAMOR'] = '1'
 
       IO.popen([ 'sommelier', '-X', '--glamor',
         '--direct-scale',
