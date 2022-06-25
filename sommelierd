@@ -3,6 +3,7 @@ require 'optparse'
 require 'fileutils'
 require 'securerandom'
 
+SOMMELIERD_VERSION = '1.1'
 $LOGFILE = (ENV.fetch('SOMMELIER_LOG', '').empty?) ? '/tmp/sommelier.log' : ENV['SOMMELIER_LOG']
 
 # set XDG_RUNTIME_DIR if not set
@@ -21,6 +22,7 @@ $action = nil
 
 begin
   OptionParser.new do |opts|
+    opts.version = SOMMELIERD_VERSION
     opts.banner = <<~EOT
       sommelierd: Sommelier daemon manager
 
