@@ -23,6 +23,8 @@ CREW_PREFIX = File.expand_path('../../..', __dir__)
 puts "\e[1;33m" + 'Detecting system DPI (a new tab will appear and close quickly)...' + "\e[0m"
 puts
 
+sleep 1
+
 # start a web server, wait for dpi_checker.html to upload screen DPI
 log 'Starting web server...'
 
