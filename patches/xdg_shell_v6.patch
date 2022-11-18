@@ -6,7 +6,7 @@ diff -Nur a/sommelier.cc b/sommelier.cc
            sl_data_device_manager_global_create(ctx);
      }
 -  } else if (strcmp(interface, "xdg_wm_base") == 0) {
-+  } else if (strcmp(interface, "xdg_wm_base") == 0 || strcmp(interface, "zxdg_shell_v6") == 0) {
++  } else if ((strcmp(interface, "xdg_wm_base") == 0) || (strcmp(interface, "zxdg_shell_v6") == 0)) {
      struct sl_xdg_shell* xdg_shell =
          static_cast<sl_xdg_shell*>(malloc(sizeof(struct sl_xdg_shell)));
      assert(xdg_shell);
