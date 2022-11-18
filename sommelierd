@@ -31,7 +31,7 @@ def start_somm_x11_daemon
 
   # write pid to /tmp/sommelier-x11.pid
   # write current display number to /tmp/sommelier-x11.display (used for checking available display in sommelier.env)
-  File.write('/tmp/sommelier-x11.info', info.to_json)
+  File.write(X11_INFO, info.to_json)
 end
 
 def start_somm_wl_daemon
@@ -67,14 +67,14 @@ end
 
 def somm_daemon_status
   # vaild_daemon_running: check sommelier process validity
-  somm_wl_info  = File.exist?(WL_INFO)  && JSON.load_file(WL_INFO)
-  somm_x11_info = File.exist?(X11_INFO) && JSON.load_file(X11_INFO)
+  somm_wl_info  = File.exist?(WL_INFO)  ? JSON.load_file(WL_INFO) : nil
+  somm_x11_info = File.exist?(X11_INFO) ? JSON.load_file(X11_INFO) : nil
 
-  somm_wl_pid = somm_wl_info['pid']
-  somm_x11_pid = somm_x11_info['pid']
+  somm_wl_pid = somm_wl_info&['pid']
+  somm_x11_pid = somm_x11_info&['pid']
 
-  somm_wl_running  = Dir.exist?("/proc/#{somm_wl_pid}/")
-  somm_x11_running = Dir.exist?("/proc/#{somm_x11_pid}/")
+  somm_wl_running  = somm_wl_pid && Dir.exist?("/proc/#{somm_wl_pid}/")
+  somm_x11_running = somm_x11_pid && Dir.exist?("/proc/#{somm_x11_pid}/")
 
   return [{ running: somm_wl_running, pid: somm_wl_pid }, { running: somm_x11_running, pid: somm_x11_pid }]
 end
@@ -110,10 +110,10 @@ begin
     opts.on('--log', 'print daemon output') do
       $stdout.write File.read(LOGFILE)
     end
-  end
+  end.parse!
 rescue OptionParser::InvalidOption => e
   abort <<~EOT
-    Invaild command: #{ARGV[0]}
+    Invaild command: #{e.args}
 
     Type `sommelierd --help` for usage.
   EOT
