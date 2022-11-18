@@ -1,6 +1,6 @@
-diff -Nur somm1/virtualization/virtwl_channel.cc somm2/virtualization/virtwl_channel.cc
---- somm1/virtualization/virtwl_channel.cc	2022-03-16 14:54:18.678670319 +0800
-+++ somm2/virtualization/virtwl_channel.cc	2022-03-16 14:54:52.133387903 +0800
+diff -Nur a/virtualization/virtwl_channel.cc b/virtualization/virtwl_channel.cc
+--- a/virtualization/virtwl_channel.cc	2022-11-06 19:29:16.580361574 +0800
++++ b/virtualization/virtwl_channel.cc	2022-11-06 19:30:54.323696019 +0800
 @@ -16,7 +16,7 @@
  #include "linux-headers/virtwl.h"  // NOLINT(build/include_directory)
  #include "wayland_channel.h"       // NOLINT(build/include_directory)
@@ -10,3 +10,25 @@ diff -Nur somm1/virtualization/virtwl_channel.cc somm2/virtualization/virtwl_cha
  #define MAX_SEND_SIZE (DEFAULT_BUFFER_SIZE - sizeof(struct virtwl_ioctl_txn))
  
  VirtWaylandChannel::~VirtWaylandChannel() {
+@@ -35,20 +35,7 @@
+     return -errno;
+ 
+   create_info.dmabuf = true;
+-  supports_dmabuf_ = true;
+-
+-  ret = allocate(create_info, create_output);
+-  if (ret && errno == ENOTTY) {
+-    fprintf(stderr,
+-            "warning: virtwl-dmabuf driver not supported by host,"
+-            " using virtwl instead\n");
+-    supports_dmabuf_ = false;
+-  } else if (create_output.fd >= 0) {
+-    // Close the returned dmabuf fd in case the invalid dmabuf metadata
+-    // given above actually manages to return an fd successfully.
+-    close(create_output.fd);
+-    create_output.fd = -1;
+-  }
++  supports_dmabuf_ = false;
+ 
+   return 0;
+ }

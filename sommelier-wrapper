@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-set -eu
+set -eua
 
 BINDIR="$(dirname "$(command -v "${0}")")"
-ARCH="$(uname -m)"
 
-[[ "${ARCH}" == 'x86_64' ]] && LIB_SUFFIX='64' || LIB_SUFFIX=''
+[ -d /lib64 ] && LIB_SUFFIX='64' || LIB_SUFFIX=''
 
-export XDG_RUNTIME_DIR=/var/run/chrome
-export LD_ARGV0_REL=../bin/sommelier
+XDG_RUNTIME_DIR=/var/run/chrome
+LD_ARGV0_REL=../bin/sommelier
 
 # get a list of all available DRM render nodes
 DRM_DEVICES_LIST=( /sys/class/drm/renderD* )
@@ -29,10 +28,9 @@ else
   SOMMELIER_DRM_DEVICE="/dev/dri/${DRM_DEVICES_LIST[0]##*/}"
 fi
 
-export SOMMELIER_DRM_DEVICE
+LD_ARGV0="${BINDIR}/sommelier"
 
 exec /lib${LIB_SUFFIX}/ld-linux-*.so.? \
-  --argv0 ${BINDIR}/sommelier \
   --library-path ${BINDIR}/../lib${LIB_SUFFIX} \
   --inhibit-rpath '' \
     ${BINDIR}/sommelier.elf \

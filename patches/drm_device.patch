@@ -1,7 +1,30 @@
-diff -Nur somm1/sommelier.cc somm2/sommelier.cc
---- somm1/sommelier.cc	2022-03-16 14:54:18.678670319 +0800
-+++ somm2/sommelier.cc	2022-03-16 14:54:52.132387403 +0800
-@@ -3068,6 +3063,7 @@
+diff -Nur a/sommelier.cc b/sommelier.cc
+--- a/sommelier.cc	2022-11-06 19:29:16.580361574 +0800
++++ b/sommelier.cc	2022-11-06 19:37:28.830367176 +0800
+@@ -2546,16 +2546,13 @@
+   wl_array_init(&ctx->selection_data);
+   ctx->selection_data_ack_pending = 0;
+ 
+-  int pipe_fd;
+-  rv = ctx->channel->create_pipe(pipe_fd);
+-  if (rv) {
+-    fprintf(stderr, "error: failed to create virtwl pipe: %s\n", strerror(-rv));
+-    sl_send_selection_notify(ctx, XCB_ATOM_NONE);
+-    return;
+-  }
++  int p[2];
++
++  rv = pipe2(p, O_CLOEXEC | O_NONBLOCK);
++  errno_assert(!rv);
+ 
+-  fd_to_receive = pipe_fd;
+-  fd_to_wayland = pipe_fd;
++  fd_to_receive = p[0];
++  fd_to_wayland = p[1];
+ 
+   xcb_get_atom_name_reply_t* atom_name_reply =
+       xcb_get_atom_name_reply(ctx->connection, atom_name_cookie, NULL);
+@@ -3634,6 +3631,7 @@
    struct sl_context ctx;
    sl_context_init_default(&ctx);
  
@@ -9,8 +32,8 @@ diff -Nur somm1/sommelier.cc somm2/sommelier.cc
    const char* display = getenv("SOMMELIER_DISPLAY");
    const char* scale = getenv("SOMMELIER_SCALE");
    const char* dpi = getenv("SOMMELIER_DPI");
-@@ -3178,6 +3174,8 @@
-       ctx.use_explicit_fence = true;
+@@ -3746,6 +3744,8 @@
+       ctx.enable_xshape = true;
      } else if (strstr(arg, "--virtgpu-channel") == arg) {
        ctx.use_virtgpu_channel = true;
 +    } else if (strstr(arg, "--drm-device") == arg) {
@@ -18,7 +41,7 @@ diff -Nur somm1/sommelier.cc somm2/sommelier.cc
  #ifdef PERFETTO_TRACING
      } else if (strstr(arg, "--trace-filename") == arg) {
        ctx.trace_filename = sl_arg_value(arg);
-@@ -3419,8 +3417,7 @@
+@@ -3856,8 +3856,7 @@
      return EXIT_FAILURE;
    }
  

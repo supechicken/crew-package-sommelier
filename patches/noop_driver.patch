@@ -1,0 +1,95 @@
+diff -Nur a/sommelier.cc b/sommelier.cc
+--- a/sommelier.cc	2022-11-06 19:29:16.580361574 +0800
++++ b/sommelier.cc	2022-11-06 19:37:28.830367176 +0800
+@@ -2546,16 +2546,13 @@
+   wl_array_init(&ctx->selection_data);
+   ctx->selection_data_ack_pending = 0;
+ 
+-  int pipe_fd;
+-  rv = ctx->channel->create_pipe(pipe_fd);
+-  if (rv) {
+-    fprintf(stderr, "error: failed to create virtwl pipe: %s\n", strerror(-rv));
+-    sl_send_selection_notify(ctx, XCB_ATOM_NONE);
+-    return;
+-  }
++  int p[2];
++
++  rv = pipe2(p, O_CLOEXEC | O_NONBLOCK);
++  errno_assert(!rv);
+ 
+-  fd_to_receive = pipe_fd;
+-  fd_to_wayland = pipe_fd;
++  fd_to_receive = p[0];
++  fd_to_wayland = p[1];
+ 
+   xcb_get_atom_name_reply_t* atom_name_reply =
+       xcb_get_atom_name_reply(ctx->connection, atom_name_cookie, NULL);
+diff -Nur a/sommelier-shm.cc b/sommelier-shm.cc
+--- a/sommelier-shm.cc	2022-11-06 19:29:16.577028241 +0800
++++ b/sommelier-shm.cc	2022-11-06 19:30:54.323696019 +0800
+@@ -133,25 +133,11 @@
+   struct sl_host_shm_pool* host =
+       static_cast<sl_host_shm_pool*>(wl_resource_get_user_data(resource));
+ 
+-  struct sl_host_buffer* host_buffer = sl_create_host_buffer(
+-      host->shm->ctx, client, id, NULL, width, height, /*is_drm=*/false);
+-
+-  host_buffer->shm_format = format;
+-  host_buffer->shm_mmap = sl_mmap_create(
+-      host->fd, sl_size_for_shm_format(format, height, stride),
+-      sl_shm_bpp_for_shm_format(format),
+-      sl_shm_num_planes_for_shm_format(format), offset, stride,
+-      offset + sl_offset_for_shm_format_plane(format, height, stride, 1),
+-      stride, sl_y_subsampling_for_shm_format_plane(format, 0),
+-      sl_y_subsampling_for_shm_format_plane(format, 1));
+-  // In the case of mmaps created from the client buffer, we want to be able
+-  // to close the FD when the client releases the shm pool (i.e. when it's
+-  // done transferring) as opposed to when the pool is freed (i.e. when we're
+-  // done drawing).
+-  // We do this by removing the handle to the FD after it has been mmapped,
+-  // which prevents a double-close.
+-  host_buffer->shm_mmap->fd = -1;
+-  host_buffer->shm_mmap->buffer_resource = host_buffer->resource;
++  assert(host->proxy);
++  sl_create_host_buffer(host->shm->ctx, client, id,
++                        wl_shm_pool_create_buffer(host->proxy, offset, width,
++                                                  height, stride, format),
++                        width, height, /*is_drm=*/true);
+ }
+ 
+ static void sl_host_shm_pool_destroy(struct wl_client* client,
+@@ -203,7 +189,9 @@
+                                  &sl_shm_pool_implementation, host_shm_pool,
+                                  sl_destroy_host_shm_pool);
+ 
+-  host_shm_pool->fd = fd;
++  host_shm_pool->proxy = wl_shm_create_pool(host->shm_proxy, fd, size);
++  wl_shm_pool_set_user_data(host_shm_pool->proxy, host_shm_pool);
++  close(fd);
+ }
+ 
+ static const struct wl_shm_interface sl_shm_implementation = {
+diff -Nur a/sommelier-data-device-manager.cc b/sommelier-data-device-manager.cc
+--- a/sommelier-data-device-manager.cc	2022-11-06 19:29:16.577028241 +0800
++++ b/sommelier-data-device-manager.cc	2022-11-06 19:30:54.323696019 +0800
+@@ -179,18 +179,8 @@
+   struct sl_host_data_offer* host =
+       static_cast<sl_host_data_offer*>(wl_resource_get_user_data(resource));
+ 
+-  int pipe_fd, rv;
+-  rv = host->ctx->channel->create_pipe(pipe_fd);
+-  if (rv) {
+-    fprintf(stderr, "error: failed to create virtwl pipe: %s\n", strerror(-rv));
+-    close(fd);
+-    return;
+-  }
+-
+-  sl_data_transfer_create(wl_display_get_event_loop(host->ctx->host_display),
+-                          pipe_fd, fd);
+-
+-  wl_data_offer_receive(host->proxy, mime_type, pipe_fd);
++  wl_data_offer_receive(host->proxy, mime_type, fd);
++  close(fd);
+ }
+ 
+ static void sl_data_offer_destroy(struct wl_client* client,

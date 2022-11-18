@@ -1,174 +1,120 @@
 #!/usr/bin/env ruby
 require 'fileutils'
 require 'securerandom'
+require 'json'
+require 'optparse'
 
-$LOGFILE = (ENV['SOMMELIER_LOG'].to_s.empty?) ? '/tmp/sommelier.log' : ENV['SOMMELIER_LOG']
+ENV['XDG_RUNTIME_DIR'] ||= '/var/run/chrome' # set XDG_RUNTIME_DIR if not set
 
-# set XDG_RUNTIME_DIR if not set
-ENV['XDG_RUNTIME_DIR'] = (ENV['XDG_RUNTIME_DIR'].to_s.empty?) ? '/var/run/chrome' : ENV['XDG_RUNTIME_DIR']
+TMPDIR   = ENV.fetch('TMPDIR', '/tmp')
+LOGFILE  = ENV.fetch( 'SOMMELIER_LOGFILE',  File.join(TMPDIR, 'sommelier.log') )
+WL_INFO  = ENV.fetch( 'SOMMELIER_WL_INFO',  File.join(TMPDIR, 'sommelier-wl.info') )
+X11_INFO = ENV.fetch( 'SOMMELIER_X11_INFO', File.join(TMPDIR, 'sommelier-x11.log') )
 
-SOMMELIER_X_DISPLAY = (ENV['SOMMELIER_X_DISPLAY'].to_s.empty?) ? ':0' : ENV['SOMMELIER_X_DISPLAY']
-SOMMELIER_WL_DISPLAY = (ENV['SOMMELIER_WL_DISPLAY'].to_s.empty?) ? 'wayland-1' : ENV['SOMMELIER_WL_DISPLAY']
+def start_somm_x11_daemon
+  ENV['DISPLAY']    ||= ':0'
+  ENV['XAUTHORITY'] ||= '/home/chronos/.Xauthority'
 
-HELP = <<EOT
-sommelierd: Sommelier daemon manager
+  somm_pid = spawn 'sommelier', '-X', '--glamor',
+                   "--x-display=#{ENV['DISPLAY']}",
+                   "--x-auth=#{ENV['XAUTHORITY']}",
+                   '--no-exit-with-child',
+                   'bash', '-eu', '-c', <<~CMD
+                     echo -n >> #{ENV['XAUTHORITY']}
+                     xauth -f #{ENV['XAUTHORITY']} add #{ENV['DISPLAY']} . #{SecureRandom.hex(16)}
+                     source #{__dir__}/../etc/sommelierrc
+                   CMD
 
-Usage: sommelierd <command>
+  info = { pid: somm_pid, display: ENV['DISPLAY'] }
 
-  --start     start sommelier daemon
-  --stop      stop sommelier daemon
-  --restart   restart sommelier daemon
-  --log       print daemon output, check and print new outputs repeatedly (blocking)
-  --help, -h  print this message
+  warn "process running with PID #{pid}"
 
-EOT
-
-trap('INT') { abort 'Interrupted' }
-
-def start_somm_x_daemon (display = SOMMELIER_X_DISPLAY)
-  Process.fork do
-    Process.setproctitle 'sommelier X11 daemon (wrapper script)'
-
-    Process.daemon(false, true)
-
-    # redirect output to log file
-    STDOUT.reopen($LOGIO)
-    STDERR.reopen($LOGIO)
-
-    # write output to log file directly without saving in buffer
-    STDOUT.sync = true
-    STDERR.sync = true
-
-    begin
-      socket_file = "/tmp/.X11-unix/X#{display.tr(':', '')}"
-      IO.popen([ 'sommelier', '-X', '--glamor',
-        "--x-display=#{display}",
-        "--x-auth=/home/chronos/.Xauthority",
-        '--no-exit-with-child',
-        'bash', '-c', <<~CMD
-          set -eu -o pipefail
-
-          export DISPLAY="#{display}"
-
-          echo -n >> /home/chronos/.Xauthority
-
-          xauth -f /home/chronos/.Xauthority add ${DISPLAY} . "#{SecureRandom.hex(16)}"
-          source #{__dir__}/../etc/sommelierrc
-        CMD
-      ], err: [:child, :out]) do |io|
-        puts "[somm_x11]: process running with PID #{io.pid}"
-        File.write('/tmp/sommelier-x.pid', io.pid) # write pid to /tmp/sommelier-x.pid
-
-        # write current display number to /tmp/sommelier-x.display (used for checking available display in sommelier.env)
-        File.write('/tmp/sommelier-x.display', display)
-
-        print "[somm_x11]: #{io.gets}" until io.eof?
-        io.close
-      end
-      puts '[somm_x11]: process exited'
-    ensure
-      FileUtils.rm_f [ socket_file, *Dir['/tmp/sommelier-x.{display,pid}'] ]
-      puts "[somm_x11]: socket #{socket_file} removed."
-    end
-  end
+  # write pid to /tmp/sommelier-x11.pid
+  # write current display number to /tmp/sommelier-x11.display (used for checking available display in sommelier.env)
+  File.write('/tmp/sommelier-x11.info', info.to_json)
 end
 
-def start_somm_wl_daemon (display = SOMMELIER_WL_DISPLAY)
-  Process.fork do
-    Process.setproctitle 'sommelier Wayland daemon (wrapper script)'
+def start_somm_wl_daemon
+  ENV['WAYLAND_DISPLAY'] ||= 'wayland-1'
 
-    Process.daemon(false, true)
+  somm_pid = spawn 'sommelier', '--parent', "--socket=#{ENV['WAYLAND_DISPLAY']}"
+  info     = { pid: somm_pid, display: ENV['WAYLAND_DISPLAY'] }
 
-    # redirect output to log file
-    STDOUT.reopen($LOGIO)
-    STDERR.reopen($LOGIO)
+  warn "process running with PID #{pid}"
 
-    # write output to log file directly without staying in buffer
-    STDOUT.sync = true
-    STDERR.sync = true
-
-    begin
-      socket_file = "#{ENV['XDG_RUNTIME_DIR']}/#{display}"
-      IO.popen([ 'sommelier', '--parent', "--socket=#{display}" ], err: [:child, :out]) do |io|
-        puts "[somm_wl]: process running with PID #{io.pid}"
-        File.write('/tmp/sommelier-wl.pid', io.pid) # write pid to /tmp/sommelier-wl.pid
-
-        # write current display number to /tmp/sommelier-wl.display (used for checking available display in sommelier.env)
-        File.write('/tmp/sommelier-wl.display', display)
-
-        print "[somm_wl]: #{io.gets}" until io.eof?
-        io.close
-      end
-      puts '[somm_wl]: process exited'
-    ensure
-      FileUtils.rm_f [ socket_file, "#{socket_file}.lock", *Dir['/tmp/sommelier-wl.{display,pid}'] ]
-      puts "[somm_wl]: socket #{socket_file} removed."
-    end
-  end
+  # write pid to /tmp/sommelier-wl.pid
+  # write current display number to /tmp/sommelier-wl.display (used for checking available display in sommelier.env)
+  File.write(WL_INFO, info.to_json)
 end
 
-def stop_somm
-  # stop_somm: kill sommelier process listed in /tmp/sommelier-*.pid files
-  x_pid = ( File.exist?('/tmp/sommelier-x.pid') ) ? File.read('/tmp/sommelier-x.pid') : nil
-  wl_pid = ( File.exist?('/tmp/sommelier-wl.pid') ) ? File.read('/tmp/sommelier-wl.pid') : nil
+def start_somm_daemon
+  somm_wl_status, somm_x11_status = somm_daemon_status
 
-  [ x_pid, wl_pid ].reject(&:nil?).each do |pid|
-    begin
-      Process.kill('TERM', pid.to_i)
-    rescue Errno::ESRCH
-    end
-  end
+  # redirect output to log file
+  $stderr.reopen( $stdout.reopen(WL_LOG) )
 
-  sleep 0.5 # ensure the daemon processes have been killed
-  puts "sommelier stopped"
+  start_somm_wl_daemon unless somm_wl_status[:running]
+  start_somm_x11_daemon unless somm_x11_running[:running]
 end
 
-def vaild_daemon_running?
+def stop_somm_daemon
+  # stop_somm_daemon: kill sommelier process listed in /tmp/sommelier-*.info files
+  somm_wl_status, somm_x11_status = somm_daemon_status
+
+  Process.kill('TERM', somm_wl_status[:pid]) if somm_wl_running[:running]
+  Process.kill('TERM', somm_x11_status[:pid]) if somm_x11_status[:running]
+end
+
+def somm_daemon_status
   # vaild_daemon_running: check sommelier process validity
-  if File.exist?('/tmp/sommelier-x.pid') and File.exist?('/tmp/sommelier-wl.pid')
-    x_pid = File.read('/tmp/sommelier-x.pid')
-    wl_pid = File.read('/tmp/sommelier-wl.pid')
+  somm_wl_info  = File.exist?(WL_INFO)  && JSON.load_file(WL_INFO)
+  somm_x11_info = File.exist?(X11_INFO) && JSON.load_file(X11_INFO)
 
-    [ x_pid, wl_pid ].each do |pid|
-      begin
-        # use Process.kill to test pid listed in /tmp/sommelier-*.pid files
-        Process.kill(0, pid.to_i)
-      rescue Errno::ESRCH
-        return false
-      end
-    end
-    return true
-  else
-    return false
-  end
+  somm_wl_pid = somm_wl_info['pid']
+  somm_x11_pid = somm_x11_info['pid']
+
+  somm_wl_running  = Dir.exist?("/proc/#{somm_wl_pid}/")
+  somm_x11_running = Dir.exist?("/proc/#{somm_x11_pid}/")
+
+  return [{ running: somm_wl_running, pid: somm_wl_pid }, { running: somm_x11_running, pid: somm_x11_pid }]
 end
 
-if $0 =~ /(re)?startsommelier$/ or ARGV[0] =~ /^--(re)?start$/
-  stop_somm if $0 =~ /restartsommelier$/ or ARGV[0] == '--restart'
+# handle symlinks
+case File.basename($0)
+when 'startsommelier'
+  ARGV << '--start'
+when 'stopsommelier'
+  ARGV << '--stop'
+when 'restartsommelier'
+  ARGV << '--restart'
+end
 
-  unless vaild_daemon_running?
-    $LOGIO = File.open($LOGFILE, 'w')
-    $LOGIO.sync = true
-    start_somm_x_daemon
-    start_somm_wl_daemon
+begin
+  OptionParser.new do |opts|
+    opts.banner = <<~EOT
+      sommelierd: Sommelier daemon manager
+
+      Usage: sommelierd <command>
+    EOT
+
+    opts.on('--start', 'start sommelier daemon') { start_somm_daemon }
+    opts.on('--stop',  'stop sommelier daemon' ) { stop_somm_daemon }
+
+    opts.on('--restart', 'restart sommelier daemon') do
+      stop_somm_daemon
+
+      start_somm_wl_daemon
+      start_somm_x11_daemon
+    end
+
+    opts.on('--log', 'print daemon output') do
+      $stdout.write File.read(LOGFILE)
+    end
   end
-elsif $0 =~ /stopsommelier/ or ARGV[0] == '--stop'
-  stop_somm
-elsif ARGV[0] == '--log'
-  io = File.open($LOGFILE, 'r'); sleep(0.2) until File.exist?($LOGFILE)
-  # print daemon output, check and print new outputs repeatedly
-  while (sleep 0.2; log = io.read) do
-    puts log.gsub(/^(\[.*?\])/, "\e[0;33m\\1\e[0m") unless log.empty?
-  end
-elsif ARGV[0] == '--status'
-  abort "sommelier not running, see #{$LOGFILE} for more info." unless vaild_daemon_running?
-  puts "sommelier process running: #{File.read('/tmp/sommelier-x.pid')} #{File.read('/tmp/sommelier-wl.pid')}"
-elsif [ '--help', '-h' ].include?(ARGV[0])
-  puts HELP
-else
-  STDERR.puts <<~EOT
+rescue OptionParser::InvalidOption => e
+  abort <<~EOT
     Invaild command: #{ARGV[0]}
-    
+
     Type `sommelierd --help` for usage.
   EOT
 end
