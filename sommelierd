@@ -27,7 +27,7 @@ def start_somm_x11_daemon
 
   info = { pid: somm_pid, display: ENV['DISPLAY'] }
 
-  warn "process running with PID #{pid}"
+  warn "process running with PID #{somm_pid}"
 
   # write pid to /tmp/sommelier-x11.pid
   # write current display number to /tmp/sommelier-x11.display (used for checking available display in sommelier.env)
@@ -40,7 +40,7 @@ def start_somm_wl_daemon
   somm_pid = spawn 'sommelier', '--parent', "--socket=#{ENV['WAYLAND_DISPLAY']}"
   info     = { pid: somm_pid, display: ENV['WAYLAND_DISPLAY'] }
 
-  warn "process running with PID #{pid}"
+  warn "process running with PID #{somm_pid}"
 
   # write pid to /tmp/sommelier-wl.pid
   # write current display number to /tmp/sommelier-wl.display (used for checking available display in sommelier.env)
@@ -51,17 +51,17 @@ def start_somm_daemon
   somm_wl_status, somm_x11_status = somm_daemon_status
 
   # redirect output to log file
-  $stderr.reopen( $stdout.reopen(WL_LOG) )
+  $stderr.reopen( $stdout.reopen(LOGFILE) )
 
   start_somm_wl_daemon unless somm_wl_status[:running]
-  start_somm_x11_daemon unless somm_x11_running[:running]
+  start_somm_x11_daemon unless somm_x11_status[:running]
 end
 
 def stop_somm_daemon
   # stop_somm_daemon: kill sommelier process listed in /tmp/sommelier-*.info files
   somm_wl_status, somm_x11_status = somm_daemon_status
 
-  Process.kill('TERM', somm_wl_status[:pid]) if somm_wl_running[:running]
+  Process.kill('TERM', somm_wl_status[:pid]) if somm_wl_status[:running]
   Process.kill('TERM', somm_x11_status[:pid]) if somm_x11_status[:running]
 end
 
@@ -70,8 +70,8 @@ def somm_daemon_status
   somm_wl_info  = File.exist?(WL_INFO)  ? JSON.load_file(WL_INFO) : nil
   somm_x11_info = File.exist?(X11_INFO) ? JSON.load_file(X11_INFO) : nil
 
-  somm_wl_pid = somm_wl_info&['pid']
-  somm_x11_pid = somm_x11_info&['pid']
+  somm_wl_pid = somm_wl_info && somm_wl_info['pid']
+  somm_x11_pid = somm_x11_info && somm_x11_info['pid']
 
   somm_wl_running  = somm_wl_pid && Dir.exist?("/proc/#{somm_wl_pid}/")
   somm_x11_running = somm_x11_pid && Dir.exist?("/proc/#{somm_x11_pid}/")
